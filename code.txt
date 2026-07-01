@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RL Rank Tracker Overlay Pro - Mobile Preview</title>
+    <style>
+        /* --- STYLE GLOBAL & THÈME ESPORT --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #0d1117; color: #c9d1d9; display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- SIDEBAR NAV --- */
+        .sidebar { width: 80px; background: #161b22; padding: 20px 10px; border-right: 1px solid #30363d; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .logo { font-size: 10px; font-weight: bold; color: #58a6ff; text-align: center; text-transform: uppercase; }
+        .nav-btn { width: 50px; height: 50px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; text-align: center; }
+        .nav-btn.active, .nav-btn:hover { background: #58a6ff; color: #0d1117; font-weight: bold; }
+
+        /* --- CONTENU PRINCIPAL --- */
+        .content { flex: 1; padding: 20px; overflow-y: auto; position: relative; }
+        h2 { margin-bottom: 15px; color: #fff; font-size: 20px; }
+        
+        /* --- FORMULAIRES & BOUTONS --- */
+        .search-box { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        select, input, button { background: #21262d; border: 1px solid #30363d; color: #fff; padding: 12px; border-radius: 6px; font-size: 14px; width: 100%; outline: none; }
+        button { background: #238636; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #2ea043; }
+        .btn-overlay { background: #00c3ff; color: #000; }
+        .btn-overlay:hover { background: #00a2d4; }
+
+        /* --- STATS CARDS --- */
+        .card { background: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 8px; margin-top: 15px; display: none; }
+        .mmr { font-size: 28px; font-weight: bold; color: #58a6ff; margin: 5px 0; }
+        .progress-bar-container { background: #21262d; border-radius: 10px; height: 8px; width: 100%; margin: 10px 0; overflow: hidden; }
+        .progress-bar { background: #58a6ff; height: 100%; width: 75%; }
+
+        /* --- SIMULATION OVERLAY (INTERACTIF) --- */
+        .overlay-sim {
+            position: absolute; top: 20px; right: 20px; width: 220px;
+            background: rgba(22, 27, 34, 0.95); border: 2px solid #58a6ff;
+            padding: 12px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none; cursor: move; z-index: 100;
+        }
+        .overlay-header { font-size: 10px; text-transform: uppercase; color: #58a6ff; letter-spacing: 1px; margin-bottom: 5px; }
+        .overlay-body { display: flex; justify-content: space-between; align-items: center; }
+        .overlay-mmr { font-size: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="logo">RL Pro</div>
+        <div class="nav-btn active" onclick="switchTab('dash')">Dash</div>
+        <div class="nav-btn" onclick="switchTab('over')">Over</div>
+    </nav>
+
+    <main class="content">
+        
+        <div id="tab-dash">
+            <h2>Tracker de Rang</h2>
+            <div class="search-box">
+                <select id="platform">
+                    <option value="epic">Epic Games</option>
+                    <option value="steam">Steam</option>
+                    <option value="psn">PlayStation</option>
+                    <option value="xbox">Xbox</option>
+                </select>
+                <input type="text" id="username" placeholder="Entre ton pseudo...">
+                <button onclick="mockFetchStats()">Rechercher</button>
+            </div>
+
+            <div class="card" id="stats-card">
+                <h3 id="res-rank">Grand Champion I</h3>
+                <p style="color: #8b949e;">Division II</p>
+                <div class="mmr" id="res-mmr">1455 MMR</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar"></div>
+                </div>
+                <p style="font-size: 12px; color: #58a6ff;">~3 victoires avant la div supérieure</p>
+            </div>
+        </div>
+
+        <div id="tab-over" style="display: none;">
+            <h2>Gestion de l'Overlay</h2>
+            <p style="margin-bottom: 15px; font-size: 14px; color: #8b949e;">Active l'overlay pour voir le widget flotter à l'écran.</p>
+            <button class="btn-overlay" onclick="toggleOverlaySim()">Activer / Masquer l'Overlay</button>
+        </div>
+
+        <div class="overlay-sim" id="overlayWidget" id="drag">
+            <div class="overlay-header">RL Rank Tracker Pro</div>
+            <div class="overlay-body">
+                <div>
+                    <div style="font-weight: bold; font-size: 14px;" id="ov-rank">Grand Champion I</div>
+                    <div style="font-size: 11px; color: #8b949e;">Division II</div>
+                </div>
+                <div class="overlay-mmr" id="ov-mmr">1455</div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Changement d'onglets
+        function switchTab(tab) {
+            document.getElementById('tab-dash').style.display = tab === 'dash' ? 'block' : 'none';
+            document.getElementById('tab-over').style.display = tab === 'over' ? 'block' : 'none';
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // Simulation de l'API de tracking
+        function mockFetchStats() {
+            const user = document.getElementById('username').value;
+            if(!user) {
+                alert('Indique un pseudo !');
+                return;
+            }
+            
+            // On affiche la card des stats
+            document.getElementById('stats-card').style.display = 'block';
+            
+            // On met à jour les données (simulation)
+            document.getElementById('res-rank').innerText = "Grand Champion I";
+            document.getElementById('res-mmr').innerText = "1455 MMR";
+            
+            // On synchronise l'overlay
+            document.getElementById('ov-rank').innerText = "Grand Champion I";
+            document.getElementById('ov-mmr').innerText = "1455";
+        }
+
+        // Afficher / Masquer l'overlay simulé
+        function toggleOverlaySim() {
+            const ov = document.getElementById('overlayWidget');
+            ov.style.display = ov.style.display === 'block' ? 'none' : 'block';
+        }
+
+        // Code pour rendre l'overlay déplaçable au doigt sur téléphone (Touch Events)
+        const dragItem = document.getElementById("overlayWidget");
+        let active = false;
+        let currentX, currentY, initialX, initialY;
+        let xOffset = 0, yOffset = 0;
+
+        document.addEventListener("touchstart", dragStart, false);
+        document.addEventListener("touchend", dragEnd, false);
+        document.addEventListener("touchmove", drag, false);
+        document.addEventListener("mousedown", dragStart, false);
+        document.addEventListener("mouseup", dragEnd, false);
+        document.addEventListener("mousemove", drag, false);
+
+        function dragStart(e) {
+            let type = e.type;
+            if (type === 'touchstart') {
+                if (e.touches[0].target === dragItem || dragItem.contains(e.touches[0].target)) {
+                    active = true;
+                    initialX = e.touches[0].clientX - xOffset;
+                    initialY = e.touches[0].clientY - yOffset;
+                }
+            } else {
+                if (e.target === dragItem || dragItem.contains(e.target)) {
+                    active = true;
+                    initialX = e.clientX - xOffset;
+                    initialY = e.clientY - yOffset;
+                }
+            }
+        }
+
+        function dragEnd() {
+            initialX = currentX;
+            initialY = currentY;
+            active = false;
+        }
+
+        function drag(e) {
+            if (active) {
+                e.preventDefault();
+                if (e.type === "touchmove") {
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                } else {
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                }
+                xOffset = currentX;
+                yOffset = currentY;
+                setTranslate(currentX, currentY, dragItem);
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = "translate3d(" + xPos + "px, " + yPos + "px, 0)";
+        }
+    </script>
+</body>
+</html>
+const fs = require('fs');
+const path = require('path');
+
+// 1. Définition des structures de fichiers
+const files = {
+    // Fichier de configuration NPM et Electron-Builder
+    'package.json': `{
+  "name": "rl-rank-tracker-overlay-pro",
+  "version": "1.0.0",
+  "description": "Tracker de rang et overlay professionnel pour Rocket League",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.rltracker.overlaypro",
+    "win": {
+      "target": ["nsis", "portable"],
+      "createDesktopShortcut": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}`,
+
+    // Code principal Electron (Gestion des fenêtres et raccourcis)
+    'main.js': `const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
+const path = require('path');
+
+let mainWindow;
+let overlayWindow;
+
+function createMainWindow() {
+    mainWindow = new BrowserWindow({
+        width: 1200,
+        height: 800,
+        frame: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+    mainWindow.loadFile(path.join(__dirname, 'src/index.html'));
+}
+
+function createOverlayWindow() {
+    overlayWindow = new BrowserWindow({
+        width: 400,
+        height: 200,
+        x: 50,
+        y: 50,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        resizable: true,
+        movable: true,
+        skipTaskbar: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+    overlayWindow.loadFile(path.join(__dirname, 'src/overlay.html'));
+}
+
+app.whenReady().then(() => {
+    createMainWindow();
+
+    // Raccourci clavier : Ctrl+Shift+H pour masquer/afficher l'overlay
+    globalShortcut.register('CommandOrControl+Shift+H', () => {
+        if (overlayWindow) {
+            if (overlayWindow.isVisible()) overlayWindow.hide();
+            else overlayWindow.show();
+        }
+    });
+});
+
+ipcMain.on('toggle-overlay', () => {
+    if (!overlayWindow) createOverlayWindow();
+    else overlayWindow.isVisible() ? overlayWindow.hide() : overlayWindow.show();
+});
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+});`,
+
+    // Interface du Menu Principal
+    'src/index.html': `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>RL Rank Tracker Overlay Pro</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="logo">RL OVERLAY PRO</div>
+            <ul>
+                <li class="active">Tableau de bord</li>
+                <li>Recherche</li>
+                <li>Gestion Overlay</li>
+                <li>Paramètres</li>
+            </ul>
+        </nav>
+        <main class="content">
+            <section id="search-section">
+                <h2>Recherche de Joueur</h2>
+                <div class="search-box">
+                    <select id="platform-select">
+                        <option value="epic">Epic Games</option>
+                        <option value="steam">Steam</option>
+                        <option value="xbox">Xbox</option>
+                        <option value="psn">PlayStation</option>
+                    </select>
+                    <input type="text" id="username-input" placeholder="Pseudo Rocket League...">
+                    <button onclick="fetchStats()">Rechercher</button>
+                </div>
+                <div class="stats-display" id="stats-display" style="display: none;">
+                    <div class="card rank-card">
+                        <h3 id="rank-title">Grand Champion I</h3>
+                        <p class="mmr">MMR: <span id="rank-mmr">1455</span></p>
+                    </div>
+                </div>
+            </section>
+            <section id="overlay-section" style="margin-top: 40px;">
+                <h2>Contrôle du Tracker</h2>
+                <button class="btn-primary" onclick="toggleOverlay()">Activer / Désactiver l'Overlay</button>
+            </section>
+        </main>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html>`,
+
+    // Interface de l'Overlay (Fenêtre transparente en jeu)
+    'src/overlay.html': `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0; padding: 15px;
+            background: rgba(13, 17, 23, 0.85);
+            color: #fff; font-family: 'Segoe UI', sans-serif;
+            border-radius: 8px; border: 2px solid #58a6ff;
+            overflow: hidden; -webkit-app-region: drag;
+        }
+        .header { font-size: 11px; text-transform: uppercase; color: #58a6ff; letter-spacing: 1px; }
+        .content { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+        .mmr { font-size: 26px; font-weight: bold; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="header">RL Rank Tracker Pro</div>
+    <div class="content">
+        <div>
+            <div style="font-weight: 600;">Grand Champion I</div>
+            <div style="font-size: 12px; color: #8b949e;">Division II</div>
+        </div>
+        <div class="mmr">1455</div>
+    </div>
+</body>
+</html>`,
+
+    // Styles Design Esport (Menu Principal)
+    'src/styles.css': `body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; }
+.app-container { display: flex; height: 100vh; }
+.sidebar { width: 240px; background: #161b22; padding: 20px; border-right: 1px solid #30363d; }
+.sidebar .logo { font-size: 20px; font-weight: bold; color: #58a6ff; text-align: center; margin-bottom: 30px; }
+.sidebar ul { list-style: none; padding: 0; }
+.sidebar li { padding: 12px; margin-bottom: 8px; cursor: pointer; border-radius: 6px; }
+.sidebar li.active, .sidebar li:hover { background: #21262d; color: #58a6ff; }
+.content { flex: 1; padding: 40px; }
+.search-box { display: flex; gap: 10px; }
+select, input, button { background: #21262d; border: 1px solid #30363d; color: #fff; padding: 10px; border-radius: 6px; }
+button { background: #238636; border: none; cursor: pointer; font-weight: bold; }
+button:hover { background: #2ea043; }
+.card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 8px; margin-top: 20px; }
+.mmr { font-size: 24px; font-weight: bold; color: #58a6ff; }`,
+
+    // Logique UI et appels inter-fenêtres
+    'src/renderer.js': `const { ipcRenderer } = require('electron');
+
+function fetchStats() {
+    const username = document.getElementById('username-input').value;
+    if(!username) return alert('Entre un pseudo !');
+    document.getElementById('stats-display').style.display = 'block';
+}
+
+function toggleOverlay() {
+    ipcRenderer.send('toggle-overlay');
+}`
+};
+
+// 2. Création automatique de l'arborescence
+console.log("Écriture des fichiers de l'application...");
+
+if (!fs.existsSync('src')) {
+    fs.mkdirSync('src');
+}
+
+Object.entries(files).forEach(([filepath, content]) => {
+    fs.writeFileSync(path.normalize(filepath), content.trim());
+    console.log(`[Créé] -> ${filepath}`);
+});
